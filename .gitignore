@@ -5,3 +5,5 @@ CMakeLists.txt
 junk
 junk2
 .txt
+./cmake-build-debug
+./.idea
