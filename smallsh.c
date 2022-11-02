@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 //global fg flag
 int isFgMode = 0;
