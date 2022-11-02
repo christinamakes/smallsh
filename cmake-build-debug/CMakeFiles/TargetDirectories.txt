@@ -1,3 +1,0 @@
-/Users/christina.moore/Documents/School/cs344/smallsh/cmake-build-debug/CMakeFiles/smallsh.dir
-/Users/christina.moore/Documents/School/cs344/smallsh/cmake-build-debug/CMakeFiles/edit_cache.dir
-/Users/christina.moore/Documents/School/cs344/smallsh/cmake-build-debug/CMakeFiles/rebuild_cache.dir
