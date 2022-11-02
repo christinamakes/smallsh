@@ -11,8 +11,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* Foreground flag */
-int isForeground = 0;
+//global fg flag
+int isFgMode = 0;
 
 //define maxes
 #define ARGS_MAX_SIZE 	512
