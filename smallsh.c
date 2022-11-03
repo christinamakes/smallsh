@@ -39,8 +39,6 @@ int cmdSize = 0;
 //    dir string
 char dirString[512];
 
-//signal handler. also handles fgModeOn or fgModeOff
-void catchSigtstp(void);
 //function to parse commands
 int parseInput(char* args);
 //function to execute commands
@@ -55,7 +53,7 @@ void cdCmd(void);
 void statusCmd(int);
 //exit smallsh
 void exitCmd(void);
-//exec commands handler
+//exec/fork/waitpid commands handler
 void execCmds(int);
 
 int main(int argc, char *argv[]) {
@@ -92,7 +90,7 @@ void catchSigtstp() {
  * ---------------------------------------
  * Takes raw args from user and saves them to the parsedArgs list for later use.
  *
- * Args: rawArgs - char of args[2048]
+ * Args: args - char* of args[2048]
  *
  * Returns: number of arguments in int form
  */
@@ -186,12 +184,10 @@ void cdCmd() {
     else {
         errorFlag = chdir((dir));
     }
-
-    if (errorFlag == 0) {
-        printf("%s\n", getcwd(dirString, 512));
-    }
-    else {
+//TODO: DONT FORGET PWD IN execCmds()
+    if (errorFlag != 0) {
         printf("Error cd command failed\n");
+        fflush(stdout);
     }
     printf("cd command\n");
 }
@@ -252,8 +248,9 @@ void execCmds(int called) {
  */
 void fgmModeOn(int sig) {
 //    register fgmode_off for SIGTSTP
-//    write "Foreground only mode on"
-//    fg_only = true
+    printf("Entering foreground-only mode (& is now ignored)\n");
+    fflush(stdout);
+    isFgMode = 1;
 }
 
 /*
@@ -267,6 +264,7 @@ void fgmModeOn(int sig) {
  */
 void fgModeOff(int sig) {
 //    register fgmode_on() for SIGTSTP
-//    write "Foreground only mode off"
-//    fg_only = false
+    printf("Exiting foreground-only mode\n");
+    fflush(stdout);
+    isFgMode = 0;
 }
