@@ -16,31 +16,31 @@
 int isFgMode = 0;
 
 //define maxes
-#define ARGS_MAX_SIZE 	512
+#define ARGS_MAX_SIZE 	    512
 #define COMMAND_MAX_SIZE 	2048
 
 //chars to compare to for commands
-char bkg = '&';
-char comment = '#';
+char* bkg = "&";
+char* comment = "#";
 char* expand = "$$";
-char* moveDir = "exit";
+char* moveDir = "cd";
 char* status = "status";
 char* exitSmallsh = "exit";
 //    exit flag
 int exitFlag = 0;
-//    args
-char rawArgs[COMMAND_MAX_SIZE];
+//    args list
+char* argsGlobal[ARGS_MAX_SIZE];
 int argsCount = 0;
 //    commands
 char* cmd = NULL;
 int cmdSize = 0;
 
 //signal handler. also handles fgModeOn or fgModeOff
-void catchSigtstp();
+void catchSigtstp(void);
 //function to parse commands
 int parseInput(char* args);
 //function to execute commands
-void makeCmds();
+void doCmds(void);
 //function to turn foreground only on
 void fgModeOn(int);
 //function to turn foreground only off
@@ -50,13 +50,13 @@ void cdCmd(const int*);
 //print status function
 void statusCmd(const int*);
 //exit smallsh
-void exitCmd();
+void exitCmd(void);
 
 int main(int argc, char *argv[]) {
 //get pid of shell
     pid_t shellPid = getpid();
-//list of args
-    char* parsedArgs[ARGS_MAX_SIZE];
+//list of raw args from user
+    char rawArgs[ARGS_MAX_SIZE];
 
 
     printf("%d", shellPid);
@@ -64,8 +64,8 @@ int main(int argc, char *argv[]) {
 //argsList init to NULL
     while (!exitFlag) {
         argsCount = parseInput(rawArgs);
-        parsedArgs[argsCount] = NULL;
-        exitFlag = 1;
+        argsGlobal[argsCount] = NULL;
+        doCmds();
     };
     return 0;
 }
@@ -102,16 +102,54 @@ int parseInput(char* args) {
 //    remove \n from rawArgs
     strtok(args, "\n");
 
-//    taken from https://beej.us/guide/bgc/html/split/stringref.html#man-strtok
+//    taken from https://beej.us/guide/bgc/html/split/stringref.html#man-strtok - common strtok usage loop
     char* argToken;
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
-            printf("Word: \"%s\"\n", argToken);
-        } while ((argToken = strtok(NULL, ".,?! ")) != NULL);
+//            put argToken in global args list
+            argsGlobal[numArgs] = argToken;
+            numArgs++;
+        } while ((argToken = strtok(NULL, " ")) != NULL);
     };
     return numArgs;
 };
 
+/*
+ * FUNCTION doCmds(void)
+ * ---------------------------------------
+ * Takes commands parsed in parseInput() and checked them against command names (cd, exit, etc.)
+ *
+ * Args: None
+ *
+ * Returns: None
+ */
+void doCmds(void) {
+    char* command = argsGlobal[0];
+//    command is comment '#'
+    if (strcmp(command, comment) == 0) {
+        // eat comments
+    }
+//    command is '$$'
+    else if (strcmp(command, expand) == 0) {
+        printf("variable expansion");
+    }
+//    command is 'cd'
+    else if (strcmp(command, moveDir) == 0) {
+        printf("cd command");
+    }
+//    command is 'status
+    else if (strcmp(command, status) == 0) {
+        printf("status command");
+    }
+//    command is 'exit'
+    else if (strcmp(command, exitSmallsh) == 0) {
+        printf("exit command");
+        exitFlag = 1;
+    }
+    else {
+        printf("Command not recognized");
+    };
+}
 /*
  * FUNCTION fgModeOn(int)
  * ---------------------------------------
