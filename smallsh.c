@@ -14,6 +14,8 @@
 
 //global fg flag
 int isFgMode = 0;
+//global bkg mode flag
+int isBkg = 0;
 
 //define maxes
 #define ARGS_MAX_SIZE 	    512
@@ -34,6 +36,8 @@ int argsCount = 0;
 //    commands
 char* cmd = NULL;
 int cmdSize = 0;
+//    dir string
+char dirString[512];
 
 //signal handler. also handles fgModeOn or fgModeOff
 void catchSigtstp(void);
@@ -46,20 +50,19 @@ void fgModeOn(int);
 //function to turn foreground only off
 void fgModeOff(int);
 //function to move dirs
-void cdCmd(const int*);
+void cdCmd(void);
 //print status function
-void statusCmd(const int*);
+void statusCmd(int);
 //exit smallsh
 void exitCmd(void);
+//exec commands handler
+void execCmds(int);
 
 int main(int argc, char *argv[]) {
 //get pid of shell
     pid_t shellPid = getpid();
 //list of raw args from user
     char rawArgs[ARGS_MAX_SIZE];
-
-
-    printf("%d", shellPid);
 //while no exit flag argsCount is num returned from parseInput
 //argsList init to NULL
     while (!exitFlag) {
@@ -94,7 +97,6 @@ void catchSigtstp() {
  * Returns: number of arguments in int form
  */
 int parseInput(char* args) {
-    int numArgs = 0;
 //    prompt user ':' and flush
     printf(": ");
     fflush(stdout);
@@ -107,11 +109,11 @@ int parseInput(char* args) {
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
 //            put argToken in global args list
-            argsGlobal[numArgs] = argToken;
-            numArgs++;
+            argsGlobal[argsCount] = argToken;
+            argsCount++;
         } while ((argToken = strtok(NULL, " ")) != NULL);
     };
-    return numArgs;
+    return argsCount;
 };
 
 /*
@@ -125,31 +127,120 @@ int parseInput(char* args) {
  */
 void doCmds(void) {
     char* command = argsGlobal[0];
+    char* lastCommand = argsGlobal[argsCount - 1];
+    int statusCalled = 0;
+
 //    command is comment '#'
     if (strcmp(command, comment) == 0) {
         // eat comments
     }
+//   command contains '&' as last character
+    else if (strcmp(lastCommand, bkg) == 0) {
+        printf("bkg mode on\n");
+//        don't allow bkg if foreground only mode on
+        if (isFgMode == 1) {
+            isBkg = 0;
+        } else isBkg = 1;
+    }
 //    command is '$$'
     else if (strcmp(command, expand) == 0) {
-        printf("variable expansion");
+        printf("variable expansion\n");
     }
 //    command is 'cd'
     else if (strcmp(command, moveDir) == 0) {
-        printf("cd command");
+        cdCmd();
     }
 //    command is 'status
     else if (strcmp(command, status) == 0) {
-        printf("status command");
+        statusCmd(statusCalled);
     }
 //    command is 'exit'
     else if (strcmp(command, exitSmallsh) == 0) {
-        printf("exit command");
-        exitFlag = 1;
+        exitCmd();
     }
     else {
-        printf("Command not recognized");
+        printf("Exec commands\n");
+        execCmds(statusCalled);
     };
 }
+
+/*
+ * FUNCTION cdCmd()
+ * ---------------------------------------
+ * Handles "cd" call from user.
+ *  - only "cd", will put user in HOME
+ *  - path specified, will move user
+ *
+ * Args: None
+ *
+ * Returns: None
+ */
+void cdCmd() {
+    int errorFlag = 0;
+    char* dir = argsGlobal[1];
+//    no dir specified
+    if (argsCount == 1) {
+//        E.T. go home
+        errorFlag = chdir(getenv("HOME"));
+    }
+    else {
+        errorFlag = chdir((dir));
+    }
+
+    if (errorFlag == 0) {
+        printf("%s\n", getcwd(dirString, 512));
+    }
+    else {
+        printf("Error cd command failed\n");
+    }
+    printf("cd command\n");
+}
+
+/*
+ * FUNCTION statusCmd(int)
+ * ---------------------------------------
+ * Prints out either the exit status or the terminating signal of the last foreground process.
+ * The three built-in shell commands do not count as foreground processes for the purposes of this built-in command,
+ * status will ignore built-in commands.
+ *
+ * Args: int - 1 or 0 statusCalled flag
+ *
+ * Returns: None
+ */
+void statusCmd(int called) {
+    printf("status command\n");
+}
+
+/*
+ * FUNCTION exitCmd()
+ * ---------------------------------------
+ * The exit command exits the shell.
+ * Shell will kill any other processes or jobs before it terminates itself.
+ *
+ * Args: None
+ *
+ * Returns: None
+ */
+void exitCmd() {
+    printf("exit command\n");
+    exitFlag = 1;
+}
+
+/*
+ * FUNCTION execCmds(int)
+ * ---------------------------------------
+ * Non build in command handler. Will fork a child.
+ *
+ * Args: int - 1 or 0 statusCalled flag
+ *
+ * Returns: None
+ */
+void execCmds(int called) {
+//    check for isBkg
+//    check for fgOnlyMode
+    printf("fork command\n");
+}
+
 /*
  * FUNCTION fgModeOn(int)
  * ---------------------------------------
