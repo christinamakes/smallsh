@@ -33,16 +33,13 @@ int exitFlag = 0;
 //    args list
 char* argsGlobal[ARGS_MAX_SIZE];
 int argsCount = 0;
-//    commands
-char* cmd = NULL;
-int cmdSize = 0;
-//    dir string
-char dirString[512];
 
 //function to parse commands
 int parseInput(char* args);
 //function to execute commands
 void doCmds(void);
+//helper to check for background command
+void isBkgCmd(void);
 //function to turn foreground only on
 void fgModeOn(int);
 //function to turn foreground only off
@@ -125,20 +122,15 @@ int parseInput(char* args) {
  */
 void doCmds(void) {
     char* command = argsGlobal[0];
-    char* lastCommand = argsGlobal[argsCount - 1];
     int statusCalled = 0;
-
+//  helper to check for background command and set flag
+    isBkgCmd();
 //    command is comment '#'
     if (strcmp(command, comment) == 0) {
-        // eat comments
+//       eat comments
     }
-//   command contains '&' as last character
-    else if (strcmp(lastCommand, bkg) == 0) {
-        printf("bkg mode on\n");
-//        don't allow bkg if foreground only mode on
-        if (isFgMode == 1) {
-            isBkg = 0;
-        } else isBkg = 1;
+    else if (strcmp(command, "\n") == 0) {
+//        eat newlines
     }
 //    command is '$$'
     else if (strcmp(command, expand) == 0) {
@@ -160,6 +152,26 @@ void doCmds(void) {
         printf("Exec commands\n");
         execCmds(statusCalled);
     };
+}
+
+/*
+ * FUNCTION isBkgCmd()
+ * ---------------------------------------
+ * Helper for doCmds. Checks if entered command is background and sets global flag
+ *
+ * Args: None
+ *
+ * Returns: None
+ */
+void isBkgCmd() {
+    char* lastCommand = argsGlobal[argsCount - 1];
+    if (strcmp(lastCommand, bkg) == 0) {
+        printf("bkg cmd processed\n");
+//        don't allow bkg if foreground only mode on
+        if (isFgMode == 1) {
+            isBkg = 0;
+        } else isBkg = 1;
+    }
 }
 
 /*
@@ -219,6 +231,7 @@ void statusCmd(int called) {
  */
 void exitCmd() {
     printf("exit command\n");
+//    TODO: kill all processes
     exitFlag = 1;
 }
 
