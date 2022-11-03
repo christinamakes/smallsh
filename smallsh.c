@@ -29,14 +29,16 @@ char* exitSmallsh = "exit";
 //    exit flag
 int exitFlag = 0;
 //    args
-char* args[ARGS_MAX_SIZE];
-size_t argsCount = 0;
+char rawArgs[COMMAND_MAX_SIZE];
+int argsCount = 0;
 //    commands
 char* cmd = NULL;
-size_t cmdSize = 0;
+int cmdSize = 0;
 
+//signal handler. also handles fgModeOn or fgModeOff
+void catchSigtstp();
 //function to parse commands
-void parseInput();
+int parseInput(char* args);
 //function to execute commands
 void makeCmds();
 //function to turn foreground only on
@@ -51,40 +53,74 @@ void statusCmd(const int*);
 void exitCmd();
 
 int main(int argc, char *argv[]) {
-//    get pid of shell
+//get pid of shell
     pid_t shellPid = getpid();
-
+//list of args
+    char* parsedArgs[ARGS_MAX_SIZE];
 
 
     printf("%d", shellPid);
+//while no exit flag argsCount is num returned from parseInput
+//argsList init to NULL
     while (!exitFlag) {
-        printf(": ");
-        fflush(stdout);
+        argsCount = parseInput(rawArgs);
+        parsedArgs[argsCount] = NULL;
         exitFlag = 1;
-    };
-    char str[] = "This is my string";
-    char* piece = strtok(str, " ");
-    while (piece != NULL) {
-        printf("%s\n", piece);
-        piece = strtok(NULL, " ");
     };
     return 0;
 }
 
-void catchSigtstp(int sig) {
+/*
+ * FUNCTION: catchSigtstp(int)
+ * ---------------------------------------
+ * Signal handler for SIGTSTP. Calls fgModeOn or fgModeOff.
+ *
+ * Args: None
+ *
+ * Returns: None
+ */
+void catchSigtstp() {
+//switch case (isFgMode)
     printf("hello catchSigtstp");
 };
 
-void parseInput(char** command, char* args[], char inPath[], char outPath[], size_t* argsCount, const size_t* argsMaxSize, const pid_t* shellPid) {
-    printf("hello parse input");
+/*
+ * FUNCTION: parseInput(char*)
+ * ---------------------------------------
+ * Takes raw args from user and saves them to the parsedArgs list for later use.
+ *
+ * Args: rawArgs - char of args[2048]
+ *
+ * Returns: number of arguments in int form
+ */
+int parseInput(char* rawArgs) {
+    return printf("hello parse input");
 };
 
+/*
+ * FUNCTION fgModeOn(int)
+ * ---------------------------------------
+ * Toggles foreground-only mode on when signal is received. Returns message to user.
+ *
+ * Args: int - foreground signal
+ *
+ * Returns: None
+ */
 void fgmModeOn(int sig) {
 //    register fgmode_off for SIGTSTP
 //    write "Foreground only mode on"
 //    fg_only = true
 }
 
+/*
+ * FUNCTION fgModeOff(int)
+ * ---------------------------------------
+ * Toggles foreground-only mode on when signal is received. Returns message to user.
+ *
+ * Args: int - foreground signal
+ *
+ * Returns: None
+ */
 void fgModeOff(int sig) {
 //    register fgmode_on() for SIGTSTP
 //    write "Foreground only mode off"
