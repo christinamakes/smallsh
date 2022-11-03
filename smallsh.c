@@ -93,8 +93,23 @@ void catchSigtstp() {
  *
  * Returns: number of arguments in int form
  */
-int parseInput(char* rawArgs) {
-    return printf("hello parse input");
+int parseInput(char* args) {
+    int numArgs = 0;
+//    prompt user ':' and flush
+    printf(": ");
+    fflush(stdout);
+    fgets(args, COMMAND_MAX_SIZE, stdin);
+//    remove \n from rawArgs
+    strtok(args, "\n");
+
+//    taken from https://beej.us/guide/bgc/html/split/stringref.html#man-strtok
+    char* argToken;
+    if ((argToken = strtok(args, " ")) != NULL) {
+        do {
+            printf("Word: \"%s\"\n", argToken);
+        } while ((argToken = strtok(NULL, ".,?! ")) != NULL);
+    };
+    return numArgs;
 };
 
 /*
