@@ -66,9 +66,9 @@ int main(int argc, char *argv[]) {
     char rawArgs[ARGS_MAX_SIZE];
 //while no exit flag argsCount is num returned from parseInput
 //argsList init to NULL
-    while (!exitFlag) {
+    while(1) {
         argsCount = parseInput(rawArgs);
-//        argsGlobal[argsCount] = NULL;
+        argsGlobal[argsCount] = NULL;
         doCmds();
     };
     exit(0);
@@ -132,9 +132,11 @@ void doCmds(void) {
     char* command = argsGlobal[0];
     int passStatus = 0;
 //  helper to check for background command and set flag
-    isBkgCmd();
+//TODO: FIGURE OUT BKG STUFF
+//    isBkgCmd();
+
 //    command is comment '#'
-    if ((strcmp(command, comment) == 0) || (strcmp(command, "\n") == 0)) {
+    if (command[0] == '#' || command[0] == '\n') {
 //       eat comments and new lines
     }
 //    command is '$$'
@@ -154,7 +156,6 @@ void doCmds(void) {
         exitCmd();
     }
     else {
-        printf("eaten\n");
         execCmds(&passStatus);
     };
 }
@@ -246,6 +247,7 @@ void exitCmd() {
     printf("exit command\n");
 //    TODO: kill all processes
     exitFlag = 1;
+    exit(0);
 }
 
 /*
