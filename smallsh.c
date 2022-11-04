@@ -199,11 +199,11 @@ void cdCmd() {
         errorFlag = chdir(getenv("HOME"));
     }
     else {
-        errorFlag = chdir((dir));
+        errorFlag = chdir(dir);
     }
-//TODO: DONT FORGET PWD IN execCmds()
+
     if (errorFlag != 0) {
-        printf("Error cd command failed\n");
+        printf("Error cd failed\n");
         fflush(stdout);
     }
     printf("cd command\n");
