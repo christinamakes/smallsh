@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
         argsGlobal[argsCount] = NULL;
         doCmds();
     };
+    exit(0);
     return 0;
 }
 
@@ -240,14 +241,43 @@ void exitCmd() {
  * ---------------------------------------
  * Non build in command handler. Will fork a child.
  *
+ * Source: Module 4
+ *
  * Args: int - 1 or 0 statusCalled flag
  *
  * Returns: None
  */
 void execCmds(int called) {
+//    Taken from Module 4
 //    check for isBkg
 //    check for fgOnlyMode
-    printf("fork command\n");
+    int childStatus;
+
+    // Fork a new process
+    pid_t spawnPid = fork();
+
+    switch(spawnPid){
+        case -1:
+            perror("fork()\n");
+//            TODO: Fix exitFlag/exitCmd and set status to 1
+            exit(1);
+        case 0:
+            // In the child process
+            printf("CHILD(%d) running %s command\n", getpid(), argsGlobal[0]);
+            fflush(stdout);
+            execvp(argsGlobal[0],argsGlobal);
+            // exec only returns if there is an error
+            // TODO: Fix exitFlag/exitCmd and set status to 1
+            perror("execvp");
+            exit(2);
+        default:
+            // In the parent process
+            // Wait for child's termination
+            spawnPid = waitpid(spawnPid, &childStatus, 0);
+            printf("PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
+            fflush(stdout);
+            break;
+    }
 }
 
 /*
