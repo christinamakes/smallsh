@@ -33,6 +33,10 @@ int exitFlag = 0;
 //    args list
 char* argsGlobal[ARGS_MAX_SIZE];
 int argsCount = 0;
+//    child fork list
+int forkList[100];
+int forks = 0;
+int forkStatus;
 
 //function to parse commands
 int parseInput(char* args);
@@ -150,8 +154,8 @@ void doCmds(void) {
         exitCmd();
     }
     else {
-        printf("Exec commands\n");
-        execCmds(statusCalled);
+        printf("eaten\n");
+//        execCmds(statusCalled);
     };
 }
 
@@ -251,10 +255,12 @@ void execCmds(int called) {
 //    Taken from Module 4
 //    check for isBkg
 //    check for fgOnlyMode
-    int childStatus;
 
     // Fork a new process
     pid_t spawnPid = fork();
+//    add to list of forks
+    forkList[forks] = spawnPid;
+    forks++;
 
     switch(spawnPid){
         case -1:
@@ -262,21 +268,23 @@ void execCmds(int called) {
 //            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
-            // In the child process
-            printf("CHILD(%d) running %s command\n", getpid(), argsGlobal[0]);
-            fflush(stdout);
-            execvp(argsGlobal[0],argsGlobal);
-            // exec only returns if there is an error
-            // TODO: Fix exitFlag/exitCmd and set status to 1
-            perror("execvp");
-            exit(2);
+            if(isBkg == 0) {
+                execvp(argsGlobal[0], argsGlobal);
+                // TODO: Fix exitFlag/exitCmd and set status to 1
+                perror("execvp");
+                exit(2);
+            }
         default:
             // In the parent process
             // Wait for child's termination
-            spawnPid = waitpid(spawnPid, &childStatus, 0);
-            printf("PARENT(%d): child(%d) terminated. Exiting\n", getpid(), spawnPid);
-            fflush(stdout);
-            break;
+            if(isBkg == 1) {
+                spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
+                printf("background pid is %d done: exit value %d", spawnPid, forkStatus);
+                fflush(stdout);
+            }
+            else {
+                waitpid(spawnPid, &forkStatus, 0);
+            }
     }
 }
 
