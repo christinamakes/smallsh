@@ -30,11 +30,13 @@ char* status = "status";
 char* exitSmallsh = "exit";
 //    exit flag
 int exitFlag = 0;
+//    foreground command run?
+int fgCommandRun = 0;
 //    args list
 char* argsGlobal[ARGS_MAX_SIZE];
 int argsCount = 0;
 //    child fork list
-int forkList[100];
+int forkList[100] = {0};
 int forks = 0;
 int forkStatus;
 
@@ -51,11 +53,11 @@ void fgModeOff(int);
 //function to move dirs
 void cdCmd(void);
 //print status function
-void statusCmd(int);
+void statusCmd(int* passStatus);
 //exit smallsh
 void exitCmd(void);
 //exec/fork/waitpid commands handler
-void execCmds(int);
+void execCmds(int* passStatus);
 
 int main(int argc, char *argv[]) {
 //get pid of shell
@@ -66,7 +68,7 @@ int main(int argc, char *argv[]) {
 //argsList init to NULL
     while (!exitFlag) {
         argsCount = parseInput(rawArgs);
-        argsGlobal[argsCount] = NULL;
+//        argsGlobal[argsCount] = NULL;
         doCmds();
     };
     exit(0);
@@ -98,6 +100,7 @@ void catchSigtstp() {
  */
 int parseInput(char* args) {
 //    prompt user ':' and flush
+    int localArgsCount = 0;
     printf(": ");
     fflush(stdout);
     fgets(args, COMMAND_MAX_SIZE, stdin);
@@ -109,11 +112,11 @@ int parseInput(char* args) {
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
 //            put argToken in global args list
-            argsGlobal[argsCount] = argToken;
-            argsCount++;
+            argsGlobal[localArgsCount] = argToken;
+            localArgsCount++;
         } while ((argToken = strtok(NULL, " ")) != NULL);
     };
-    return argsCount;
+    return localArgsCount;
 };
 
 /*
@@ -127,15 +130,12 @@ int parseInput(char* args) {
  */
 void doCmds(void) {
     char* command = argsGlobal[0];
-    int statusCalled = 0;
+    int passStatus = 0;
 //  helper to check for background command and set flag
     isBkgCmd();
 //    command is comment '#'
-    if (strcmp(command, comment) == 0) {
-//       eat comments
-    }
-    else if (strcmp(command, "\n") == 0) {
-//        eat newlines
+    if ((strcmp(command, comment) == 0) || (strcmp(command, "\n") == 0)) {
+//       eat comments and new lines
     }
 //    command is '$$'
     else if (strcmp(command, expand) == 0) {
@@ -147,7 +147,7 @@ void doCmds(void) {
     }
 //    command is 'status
     else if (strcmp(command, status) == 0) {
-        statusCmd(statusCalled);
+        statusCmd(&passStatus);
     }
 //    command is 'exit'
     else if (strcmp(command, exitSmallsh) == 0) {
@@ -155,7 +155,7 @@ void doCmds(void) {
     }
     else {
         printf("eaten\n");
-//        execCmds(statusCalled);
+        execCmds(&passStatus);
     };
 }
 
@@ -174,6 +174,7 @@ void isBkgCmd() {
         printf("bkg cmd processed\n");
 //        don't allow bkg if foreground only mode on
         if (isFgMode == 1) {
+            printf("Error: shell is in foreground only mode, background processes not allowed");
             isBkg = 0;
         } else isBkg = 1;
     }
@@ -192,21 +193,19 @@ void isBkgCmd() {
  */
 void cdCmd() {
     int errorFlag = 0;
-    char* dir = argsGlobal[1];
 //    no dir specified
     if (argsCount == 1) {
 //        E.T. go home
         errorFlag = chdir(getenv("HOME"));
     }
     else {
-        errorFlag = chdir(dir);
+        errorFlag = chdir(argsGlobal[1]);
     }
 
     if (errorFlag != 0) {
         printf("Error cd failed\n");
         fflush(stdout);
     }
-    printf("cd command\n");
 }
 
 /*
@@ -220,8 +219,17 @@ void cdCmd() {
  *
  * Returns: None
  */
-void statusCmd(int called) {
-    printf("status command\n");
+void statusCmd(int* passStatus) {
+    if(forkList[0] == 0) {
+        printf("Exit status %d\n", forkStatus);
+    } else {
+        if (WIFEXITED(*passStatus)) {
+            printf("Process terminated with exit code %d.\n", WEXITSTATUS(*passStatus));
+        } else if (WIFSIGNALED(*passStatus)) {
+            printf("Process terminated by signal %d.\n", WTERMSIG(*passStatus));
+        }
+        fflush(stdout);
+    }
 }
 
 /*
@@ -251,11 +259,12 @@ void exitCmd() {
  *
  * Returns: None
  */
-void execCmds(int called) {
+void execCmds(int* passStatus) {
 //    Taken from Module 4
 //    check for isBkg
 //    check for fgOnlyMode
-
+//      flip fgCommandRun flag
+    fgCommandRun = 1;
     // Fork a new process
     pid_t spawnPid = fork();
 //    add to list of forks
@@ -263,6 +272,7 @@ void execCmds(int called) {
     forks++;
 
     switch(spawnPid){
+//        error
         case -1:
             perror("fork()\n");
 //            TODO: Fix exitFlag/exitCmd and set status to 1
@@ -279,8 +289,9 @@ void execCmds(int called) {
             // Wait for child's termination
             if(isBkg == 1) {
                 spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
-                printf("background pid is %d done: exit value %d", spawnPid, forkStatus);
+                printf("background pid is %d done: ", spawnPid);
                 fflush(stdout);
+                statusCmd(passStatus);
             }
             else {
                 waitpid(spawnPid, &forkStatus, 0);
