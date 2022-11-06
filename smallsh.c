@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 //global fg flag
 int isFgMode = 0;
@@ -68,6 +69,7 @@ int main(int argc, char *argv[]) {
 //argsList init to NULL
     while(1) {
         argsCount = parseInput(rawArgs);
+//        remove previous args
         argsGlobal[argsCount] = NULL;
         doCmds();
     };
@@ -272,6 +274,10 @@ void execCmds(int* passStatus) {
 //    add to list of forks
     forkList[forks] = spawnPid;
     forks++;
+//    input/output
+    int i;
+    char* inputFile = NULL;
+    char* outputFile = NULL;
 
     switch(spawnPid){
 //        error
@@ -280,25 +286,67 @@ void execCmds(int* passStatus) {
 //            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
-            if(isBkg == 0) {
+//            check for input / output redirection
+                for(i = 0; argsGlobal[i] != NULL; i++) {
+                    if (strcmp(argsGlobal[i], "<") == 0) {
+                        inputFile = argsGlobal[i + 1];
+                        i++;
+                    }
+                    else if (strcmp(argsGlobal[i], ">") == 0) {
+                        outputFile = argsGlobal[i + 1];
+                        i++;
+                    }
+                }
+
+                if (inputFile != NULL) {
+                    int file;
+                    if ((file = open(inputFile, O_RDONLY)) == -1) {
+                        printf("Cannot open file for input\n");
+                        fflush(stdout);
+                        exit(1);
+                    } else {
+                        dup2(file, 0);
+                        close(file);
+                    }
+                }
+
+                if (outputFile != NULL) {
+                    int file2;
+                    if ((file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC)) == -1) {
+                        printf("Cannot open file for output\n");
+                        fflush(stdout);
+                        exit(1);
+                    } else {
+                        dup2(file2, 0);
+                        close(file2);
+                    }
+                }
+//            if(isBkg == 0) {
                 execvp(argsGlobal[0], argsGlobal);
                 // TODO: Fix exitFlag/exitCmd and set status to 1
                 perror("execvp");
                 exit(2);
-            }
+//            }
         default:
-            // In the parent process
-            // Wait for child's termination
+            // if background allowed:
             if(isBkg == 1) {
                 spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
                 printf("background pid is %d done: ", spawnPid);
                 fflush(stdout);
                 statusCmd(passStatus);
             }
+//            foreground execute
             else {
                 waitpid(spawnPid, &forkStatus, 0);
             }
     }
+//    check for finished children
+//        while((forkList[0] = waitpid(-1, &forkStatus, WNOHANG)) > 0) {
+//            printf("Child %d terminated\n", forkList[0]);
+//            fflush(stdout);
+//            forks--;
+//            forkList[forks] = 0;
+//        }
 }
 
 /*
