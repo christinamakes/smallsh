@@ -289,10 +289,14 @@ void execCmds(int* passStatus) {
 //            check for input / output redirection
                 for(i = 0; argsGlobal[i] != NULL; i++) {
                     if (strcmp(argsGlobal[i], "<") == 0) {
+//                        remove input file from args list
+                        argsGlobal[i] = NULL;
                         inputFile = argsGlobal[i + 1];
                         i++;
                     }
                     else if (strcmp(argsGlobal[i], ">") == 0) {
+//                        remove output file from args list
+                        argsGlobal[i] = NULL;
                         outputFile = argsGlobal[i + 1];
                         i++;
                     }
@@ -324,8 +328,8 @@ void execCmds(int* passStatus) {
 //            if(isBkg == 0) {
                 execvp(argsGlobal[0], argsGlobal);
                 // TODO: Fix exitFlag/exitCmd and set status to 1
-                perror("execvp");
-                exit(2);
+                printf("No such file or directory\n");
+                exit(1);
 //            }
         default:
             // if background allowed:
@@ -340,13 +344,11 @@ void execCmds(int* passStatus) {
                 waitpid(spawnPid, &forkStatus, 0);
             }
     }
-//    check for finished children
-//        while((forkList[0] = waitpid(-1, &forkStatus, WNOHANG)) > 0) {
-//            printf("Child %d terminated\n", forkList[0]);
-//            fflush(stdout);
-//            forks--;
-//            forkList[forks] = 0;
-//        }
+//    check for finished background children
+        while((spawnPid = waitpid(-1, &forkStatus, WNOHANG)) > 0) {
+            printf("Child %d terminated\n", forkList[0]);
+            fflush(stdout);
+        }
 }
 
 /*
