@@ -111,6 +111,10 @@ int parseInput(char* args) {
     char* argToken;
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
+//            reset background mode
+            if (isBkg == 1) {
+                isBkg = 0;
+            };
 //            put argToken in global args list
             argsGlobal[localArgsCount] = argToken;
             localArgsCount++;
@@ -131,9 +135,6 @@ int parseInput(char* args) {
 void doCmds(void) {
     char* command = argsGlobal[0];
     int passStatus = 0;
-//  helper to check for background command and set flag
-//TODO: FIGURE OUT BKG STUFF
-//    isBkgCmd();
 
 //    command is comment '#'
     if (command[0] == '#' || command[0] == '\n') {
@@ -272,6 +273,14 @@ void execCmds(int* passStatus) {
 //    add to list of forks
     forkList[forks] = spawnPid;
     forks++;
+//    to trim &
+    char* lastCommand = argsGlobal[argsCount - 1];
+
+    if (strcmp(lastCommand,"&") == 0) {
+//        remove &
+        isBkgCmd();
+        argsGlobal[argsCount - 1] = NULL;
+}
 
     switch(spawnPid){
 //        error
@@ -280,16 +289,16 @@ void execCmds(int* passStatus) {
 //            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
-            if(isBkg == 0) {
-                execvp(argsGlobal[0], argsGlobal);
-                // TODO: Fix exitFlag/exitCmd and set status to 1
-                perror("execvp");
-                exit(2);
-            }
+            execvp(argsGlobal[0], argsGlobal);
+            // TODO: Fix exitFlag/exitCmd and set status to 1
+            perror("execvp");
+            exit(2);
         default:
             // In the parent process
             // Wait for child's termination
             if(isBkg == 1) {
+                printf(":");
+                fflush(stdout);
                 spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
                 printf("background pid is %d done: ", spawnPid);
                 fflush(stdout);
