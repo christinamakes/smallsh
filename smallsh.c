@@ -11,7 +11,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <fcntl.h>
 
 //global fg flag
 int isFgMode = 0;
@@ -69,7 +68,6 @@ int main(int argc, char *argv[]) {
 //argsList init to NULL
     while(1) {
         argsCount = parseInput(rawArgs);
-//        remove previous args
         argsGlobal[argsCount] = NULL;
         doCmds();
     };
@@ -113,6 +111,10 @@ int parseInput(char* args) {
     char* argToken;
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
+//            reset background mode
+            if (isBkg == 1) {
+                isBkg = 0;
+            };
 //            put argToken in global args list
             argsGlobal[localArgsCount] = argToken;
             localArgsCount++;
@@ -133,9 +135,6 @@ int parseInput(char* args) {
 void doCmds(void) {
     char* command = argsGlobal[0];
     int passStatus = 0;
-//  helper to check for background command and set flag
-//TODO: FIGURE OUT BKG STUFF
-//    isBkgCmd();
 
 //    command is comment '#'
     if (command[0] == '#' || command[0] == '\n') {
@@ -274,10 +273,14 @@ void execCmds(int* passStatus) {
 //    add to list of forks for exit call
     forkList[forks] = spawnPid;
     forks++;
-//    input/output
-    int i;
-    char* inputFile = NULL;
-    char* outputFile = NULL;
+//    to trim &
+    char* lastCommand = argsGlobal[argsCount - 1];
+
+    if (strcmp(lastCommand,"&") == 0) {
+//        remove &
+        isBkgCmd();
+        argsGlobal[argsCount - 1] = NULL;
+}
 
     switch(spawnPid){
 //        error
@@ -286,69 +289,25 @@ void execCmds(int* passStatus) {
 //            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
-//            check for input / output redirection
-                for(i = 0; argsGlobal[i] != NULL; i++) {
-                    if (strcmp(argsGlobal[i], "<") == 0) {
-//                        remove input file from args list
-                        argsGlobal[i] = NULL;
-                        inputFile = argsGlobal[i + 1];
-                        i++;
-                    }
-                    else if (strcmp(argsGlobal[i], ">") == 0) {
-//                        remove output file from args list
-                        argsGlobal[i] = NULL;
-                        outputFile = argsGlobal[i + 1];
-                        i++;
-                    }
-                }
-
-                if (inputFile != NULL) {
-                    int file;
-                    if ((file = open(inputFile, O_RDONLY)) == -1) {
-                        printf("Cannot open file for input\n");
-                        fflush(stdout);
-                        exit(1);
-                    } else {
-                        dup2(file, 0);
-                        close(file);
-                    }
-                }
-
-                if (outputFile != NULL) {
-                    int file2;
-                    if ((file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC)) == -1) {
-                        printf("Cannot open file for output\n");
-                        fflush(stdout);
-                        exit(1);
-                    } else {
-                        dup2(file2, 0);
-                        close(file2);
-                    }
-                }
-//            if(isBkg == 0) {
-                execvp(argsGlobal[0], argsGlobal);
-                // TODO: Fix exitFlag/exitCmd and set status to 1
-                printf("No such file or directory\n");
-                exit(1);
-//            }
+            execvp(argsGlobal[0], argsGlobal);
+            // TODO: Fix exitFlag/exitCmd and set status to 1
+            perror("execvp");
+            exit(2);
         default:
-            // if background allowed:
+            // In the parent process
+            // Wait for child's termination
             if(isBkg == 1) {
+                printf(":");
+                fflush(stdout);
                 spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
                 printf("background pid is %d done: ", spawnPid);
                 fflush(stdout);
                 statusCmd(passStatus);
             }
-//            foreground execute
             else {
                 waitpid(spawnPid, &forkStatus, 0);
             }
     }
-//    check for finished background children
-        while((spawnPid = waitpid(-1, &forkStatus, WNOHANG)) > 0) {
-            printf("Child %d terminated\n", forkList[0]);
-            fflush(stdout);
-        }
 }
 
 /*
