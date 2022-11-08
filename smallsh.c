@@ -4,6 +4,7 @@
  * Due: Nov. 14th 2022
  */
 
+#define _POSIX_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
