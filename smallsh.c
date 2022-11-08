@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fcntl.h>
 
 //global fg flag
 int isFgMode = 0;
@@ -245,8 +246,9 @@ void statusCmd(int* passStatus) {
  * Returns: None
  */
 void exitCmd() {
-    printf("exit command\n");
-//    TODO: kill all processes
+    int i;
+    printf("Exiting smallsh\n");
+    for(i = 0; i < forks; i++) kill(forkList[i], SIGTERM);
     exitFlag = 1;
     exit(0);
 }
@@ -281,18 +283,61 @@ void execCmds(int* passStatus) {
         isBkgCmd();
         argsGlobal[argsCount - 1] = NULL;
 }
-
+    int i;
+    char* inputFile = NULL;
+    char* outputFile = NULL;
     switch(spawnPid){
 //        error
         case -1:
-            perror("fork()\n");
+            perror("Error: Fork failed\n");
 //            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
+//            check for input / output redirection
+            for(i = 0; argsGlobal[i] != NULL; i++) {
+                if (strcmp(argsGlobal[i], "<") == 0) {
+//                        remove < from args list
+                    argsGlobal[i] = NULL;
+                    inputFile = argsGlobal[i + 1];
+                    i++;
+                }
+                else if (strcmp(argsGlobal[i], ">") == 0) {
+//                        remove > from args list
+                    argsGlobal[i] = NULL;
+                    outputFile = argsGlobal[i + 1];
+                    i++;
+                }
+            }
+
+            if (inputFile != NULL) {
+                int file;
+                if ((file = open(inputFile, O_RDONLY)) == -1) {
+                    printf("Error: Cannot open file for input\n");
+                    fflush(stdout);
+                    exit(1);
+                } else {
+                    dup2(file, 0);
+                    close(file);
+                }
+            }
+
+            if (outputFile != NULL) {
+                int file2;
+                if ((file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC)) == -1) {
+                    printf("Error: Cannot open file for output\n");
+                    fflush(stdout);
+                    exit(1);
+                } else {
+                    dup2(file2, 0);
+                    close(file2);
+                }
+            }
+//            if(isBkg == 0) {
             execvp(argsGlobal[0], argsGlobal);
             // TODO: Fix exitFlag/exitCmd and set status to 1
-            perror("execvp");
-            exit(2);
+            printf("Error: No such file or directory\n");
+            exit(1);
+//            }
         default:
             // In the parent process
             // Wait for child's termination
