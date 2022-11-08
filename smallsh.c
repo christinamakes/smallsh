@@ -271,7 +271,7 @@ void execCmds(int* passStatus) {
     fgCommandRun = 1;
     // Fork a new process
     pid_t spawnPid = fork();
-//    add to list of forks
+//    add to list of forks for exit call
     forkList[forks] = spawnPid;
     forks++;
 //    input/output
