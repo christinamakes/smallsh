@@ -4,6 +4,7 @@
  * Due: Nov. 14th 2022
  */
 
+#define _GNU_SOURCE
 #define _POSIX_SOURCE
 #include <stdlib.h>
 #include <string.h>
@@ -332,7 +333,8 @@ void execCmds() {
 
             if (inputFile != NULL) {
                 int file;
-                if ((file = open(inputFile, O_RDONLY)) == -1) {
+                file = open(inputFile, O_RDONLY);
+                if (file == -1){
                     printf("Error: Cannot open file for input\n");
                     fflush(stdout);
                     exit(1);
@@ -344,7 +346,8 @@ void execCmds() {
 
             if (outputFile != NULL) {
                 int file2;
-                if ((file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC)) == -1) {
+                file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                if(file2 == -1){
                     printf("Error: Cannot open file for output\n");
                     fflush(stdout);
                     exit(1);
