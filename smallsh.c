@@ -5,7 +5,7 @@
  */
 
 #define _POSIX_SOURCE
-#include <stdio.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <stdio.h>
+#include <util.h>
 
 //global fg flag
 int isFgMode = 0;
@@ -60,37 +62,101 @@ void statusCmd(int* passStatus);
 void exitCmd(void);
 //exec/fork/waitpid commands handler
 void execCmds(int* passStatus);
+//signal handler
+void handle_SIGINT(int);
+void handle_SIGTSTP(int);
+
+struct sigaction SIGTSTP_action = {0};
+struct sigaction SIGINT_action = {0};
 
 int main(int argc, char *argv[]) {
 //get pid of shell
     pid_t shellPid = getpid();
 //list of raw args from user
     char rawArgs[ARGS_MAX_SIZE];
-//while no exit flag argsCount is num returned from parseInput
-//argsList init to NULL
+/*
+ * main():
+    block SIGTSTP
+    register fgmode_on() for SIGTSTP
+    loop:
+       unblock SIGTSTP
+       read_next_line()
+       block SIGTSTP
+       process_line()
+       fork_exec()
+       if fg or fg_only:
+           wait()
+ *
+ */
+// taken from module 5, SIGINT block (CTRL-C)
+    SIGINT_action.sa_handler = SIG_IGN;
+    sigfillset(&SIGINT_action.sa_mask);
+    SIGINT_action.sa_flags = 0;
+    sigaction(SIGINT, &SIGINT_action, NULL);
+
+//    SIGTSTP (CTRL-Z) handler
+    SIGTSTP_action.sa_handler = handle_SIGTSTP;
+//    from module 5, do not block
+    SIGTSTP_action.sa_flags = SA_RESTART;
+    sigfillset(&SIGTSTP_action.sa_mask);
+    sigaction(SIGTSTP, &SIGTSTP_action, NULL);
+
     while(1) {
         argsCount = parseInput(rawArgs);
         argsGlobal[argsCount] = NULL;
         doCmds();
     };
-    exit(0);
     return 0;
 }
 
 /*
- * FUNCTION: catchSigtstp(int)
+ * FUNCTION: handle_SIGTSTP(int)
  * ---------------------------------------
- * Signal handler for SIGTSTP. Calls fgModeOn or fgModeOff.
+ * Signal handler for SIGTSTP. Calls fgModeOn.
  *
- * Args: None
+ * Args: Int - signal
  *
  * Returns: None
  */
-void catchSigtstp() {
-//switch case (isFgMode)
-    printf("hello catchSigtstp");
-};
+void handle_SIGTSTP(int signo){
+    fgModeOn(1);
+}
 
+/*
+ * FUNCTION fgModeOn(int)
+ * ---------------------------------------
+ * Toggles foreground-only mode on when signal is received. Returns message to user.
+ *
+ * Args: int - foreground signal
+ *
+ * Returns: None
+ */
+void fgModeOn(int sig) {
+//    register fgmode_off for SIGTSTP
+    isFgMode = 1;
+    char* message = "Entering foreground-only mode (& is now ignored)\n";
+    char* prompt = ": ";
+    write(STDOUT_FILENO, message, 50);
+    write(STDOUT_FILENO, prompt, 2);
+}
+
+/*
+ * FUNCTION fgModeOff(int)
+ * ---------------------------------------
+ * Toggles foreground-only mode on when signal is received. Returns message to user.
+ *
+ * Args: int - foreground signal
+ *
+ * Returns: None
+ */
+void fgModeOff(int sig) {
+//    register fgmode_on() for SIGTSTP
+    isFgMode = 0;
+    char* message = ("Exiting foreground-only mode\n");
+    char* prompt = ": ";
+    write(STDOUT_FILENO, message, 30);
+    write(STDOUT_FILENO, prompt, 2);
+}
 /*
  * FUNCTION: parseInput(char*)
  * ---------------------------------------
@@ -111,19 +177,30 @@ int parseInput(char* args) {
 
 //    taken from https://beej.us/guide/bgc/html/split/stringref.html#man-strtok - common strtok usage loop
     char* argToken;
+    int i;
     if ((argToken = strtok(args, " ")) != NULL) {
         do {
 //            reset background mode
             if (isBkg == 1) {
                 isBkg = 0;
             };
-//            put argToken in global args list
+
+            // put argToken in global args list
             argsGlobal[localArgsCount] = argToken;
+
+            for(i=0;i < strlen(argsGlobal[localArgsCount]); i++) {
+                if (argsGlobal[localArgsCount][i] == '$' && argsGlobal[localArgsCount][i+1] == '$') {
+                    argsGlobal[localArgsCount][i] = '\0';
+                    argsGlobal[localArgsCount][i+1] = '\0';
+                    int pid = getpid();
+                    sprintf(argsGlobal[localArgsCount], "%s%d", argsGlobal[localArgsCount], pid);
+                }
+            };
             localArgsCount++;
         } while ((argToken = strtok(NULL, " ")) != NULL);
     };
     return localArgsCount;
-};
+}
 
 /*
  * FUNCTION doCmds(void)
@@ -141,10 +218,6 @@ void doCmds(void) {
 //    command is comment '#'
     if (command[0] == '#' || command[0] == '\n') {
 //       eat comments and new lines
-    }
-//    command is '$$'
-    else if (strcmp(command, expand) == 0) {
-        printf("variable expansion\n");
     }
 //    command is 'cd'
     else if (strcmp(command, moveDir) == 0) {
@@ -248,8 +321,9 @@ void statusCmd(int* passStatus) {
  */
 void exitCmd() {
     int i;
-    printf("Exiting smallsh\n");
+    if (forks != 0) printf("Terminating processes...\n");
     for(i = 0; i < forks; i++) kill(forkList[i], SIGTERM);
+    printf("Exiting smallsh, goodbye.\n");
     exitFlag = 1;
     exit(0);
 }
@@ -333,12 +407,17 @@ void execCmds(int* passStatus) {
                     close(file2);
                 }
             }
-//            if(isBkg == 0) {
+//          if fg only ON remove previous ignore for CTRL-C
+            if(isFgMode) {
+                SIGINT_action.sa_handler = SIG_DFL;
+                sigaction(SIGINT, &SIGINT_action, NULL);
+            }
+
             execvp(argsGlobal[0], argsGlobal);
             // TODO: Fix exitFlag/exitCmd and set status to 1
             printf("Error: No such file or directory\n");
             exit(1);
-//            }
+
         default:
             // In the parent process
             // Wait for child's termination
@@ -356,34 +435,4 @@ void execCmds(int* passStatus) {
     }
 }
 
-/*
- * FUNCTION fgModeOn(int)
- * ---------------------------------------
- * Toggles foreground-only mode on when signal is received. Returns message to user.
- *
- * Args: int - foreground signal
- *
- * Returns: None
- */
-void fgmModeOn(int sig) {
-//    register fgmode_off for SIGTSTP
-    printf("Entering foreground-only mode (& is now ignored)\n");
-    fflush(stdout);
-    isFgMode = 1;
-}
 
-/*
- * FUNCTION fgModeOff(int)
- * ---------------------------------------
- * Toggles foreground-only mode on when signal is received. Returns message to user.
- *
- * Args: int - foreground signal
- *
- * Returns: None
- */
-void fgModeOff(int sig) {
-//    register fgmode_on() for SIGTSTP
-    printf("Exiting foreground-only mode\n");
-    fflush(stdout);
-    isFgMode = 0;
-}
