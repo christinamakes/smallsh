@@ -297,11 +297,15 @@ void exitCmd() {
 void execCmds() {
 // Taken from Module 4
     int i;
+    int execStatus;
+    int input = 0;
+    int output = 0;
     char* inputFile = NULL;
     char* outputFile = NULL;
     char* lastCommand = argsGlobal[argsCount - 1];
 
-    pid_t spawnPid = fork();
+    pid_t spawnPid = -5;
+    spawnPid = fork();
     // add to list of forks for exit call
     forkList[forks] = spawnPid;
     forks++;
@@ -310,63 +314,70 @@ void execCmds() {
         isBkgCmd();
         argsGlobal[argsCount - 1] = NULL;
 }
+    // from module 4
     switch(spawnPid) {
         // error
         case -1:
             perror("Error: Fork failed\n");
             exit(1);
         case 0:
+            // if fg only ON remove previous ignore for CTRL-C
+            printf("my pid is %d\n", getpid());
+            if (isFgMode) {
+                SIGINT_action.sa_handler = SIG_DFL;
+                sigaction(SIGINT, &SIGINT_action, NULL);
+            }
+
             // check for input / output redirection
             for (i = 0; argsGlobal[i] != NULL; i++) {
                 if (strcmp(argsGlobal[i], "<") == 0) {
                     // remove < from args list
                     argsGlobal[i] = NULL;
+                    input = 1;
                     inputFile = argsGlobal[i + 1];
                     i++;
+                    printf("%s", inputFile);
                 } else if (strcmp(argsGlobal[i], ">") == 0) {
                     // remove > from args list
                     argsGlobal[i] = NULL;
+                    output = 1;
                     outputFile = argsGlobal[i + 1];
                     i++;
+                    printf("%s", outputFile);
                 }
             }
 
-            if (inputFile != NULL) {
+            if (input == 1) {
                 int file;
                 file = open(inputFile, O_RDONLY);
-                if (file == -1){
+                if (file == -1) {
                     printf("Error: Cannot open file for input\n");
                     fflush(stdout);
                     exit(1);
-                } else {
-                    dup2(file, 0);
-                    close(file);
                 }
+                dup2(file, 0);
+                close(file);
             }
 
-            if (outputFile != NULL) {
+            if (output == 1) {
                 int file2;
                 file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if(file2 == -1){
                     printf("Error: Cannot open file for output\n");
                     fflush(stdout);
                     exit(1);
-                } else {
-                    dup2(file2, 0);
-                    close(file2);
                 }
-            }
-            // if fg only ON remove previous ignore for CTRL-C
-            if (isFgMode) {
-                SIGINT_action.sa_handler = SIG_DFL;
-                sigaction(SIGINT, &SIGINT_action, NULL);
+                dup2(file2, 0);
+                close(file2);
             }
 
             // make the fork
-            execvp(argsGlobal[0], argsGlobal);
-            printf("Error: No such file or directory\n");
-            exit(1);
-
+            execStatus = execvp(argsGlobal[0], argsGlobal);
+            if (execStatus == -1 ) {
+                printf("Error: No such file or directory\n");
+                exit(1);
+            }
+            break;
         default:
             // In the parent process
             // If bkg wait for child's termination, else WNOHANG
