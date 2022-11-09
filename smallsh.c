@@ -5,16 +5,14 @@
  */
 
 #define _POSIX_SOURCE
-
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <util.h>
+
 
 //global fg flag
 int isFgMode = 0;
@@ -25,21 +23,15 @@ int isBkg = 0;
 #define ARGS_MAX_SIZE 	    512
 #define COMMAND_MAX_SIZE 	2048
 
-//chars to compare to for commands
+//  chars to compare to for commands
 char* bkg = "&";
-char* comment = "#";
-char* expand = "$$";
 char* moveDir = "cd";
 char* status = "status";
 char* exitSmallsh = "exit";
-//    exit flag
-int exitFlag = 0;
-//    foreground command run?
-int fgCommandRun = 0;
-//    args list
+//  args list
 char* argsGlobal[ARGS_MAX_SIZE];
 int argsCount = 0;
-//    child fork list
+//  child fork list
 int forkList[100] = {0};
 int forks = 0;
 int forkStatus;
@@ -50,29 +42,24 @@ int parseInput(char* args);
 void doCmds(void);
 //helper to check for background command
 void isBkgCmd(void);
-//function to turn foreground only on
-void fgModeOn(int);
-//function to turn foreground only off
-void fgModeOff(int);
+//function to turn foreground only on/off
+void fgModeToggle(int);
 //function to move dirs
 void cdCmd(void);
 //print status function
-void statusCmd(int* passStatus);
+void statusCmd(void);
 //exit smallsh
 void exitCmd(void);
 //exec/fork/waitpid commands handler
-void execCmds(int* passStatus);
-//signal handler
-void handle_SIGINT(int);
+void execCmds(void);
+//signal handler for SIGTSTP
 void handle_SIGTSTP(int);
 
 struct sigaction SIGTSTP_action = {0};
 struct sigaction SIGINT_action = {0};
 
 int main(int argc, char *argv[]) {
-//get pid of shell
-    pid_t shellPid = getpid();
-//list of raw args from user
+//  list of raw args from user
     char rawArgs[ARGS_MAX_SIZE];
 /*
  * main():
@@ -96,7 +83,7 @@ int main(int argc, char *argv[]) {
 
 //    SIGTSTP (CTRL-Z) handler
     SIGTSTP_action.sa_handler = handle_SIGTSTP;
-//    from module 5, do not block
+//    from module 5, SA_RESTART - do not block
     SIGTSTP_action.sa_flags = SA_RESTART;
     sigfillset(&SIGTSTP_action.sa_mask);
     sigaction(SIGTSTP, &SIGTSTP_action, NULL);
@@ -112,51 +99,41 @@ int main(int argc, char *argv[]) {
 /*
  * FUNCTION: handle_SIGTSTP(int)
  * ---------------------------------------
- * Signal handler for SIGTSTP. Calls fgModeOn.
+ * Signal handler for SIGTSTP. Calls fgModeToggle.
  *
  * Args: Int - signal
  *
  * Returns: None
  */
 void handle_SIGTSTP(int signo){
-    fgModeOn(1);
+    fgModeToggle(signo);
 }
 
 /*
- * FUNCTION fgModeOn(int)
+ * FUNCTION fgModeToggle(int)
  * ---------------------------------------
- * Toggles foreground-only mode on when signal is received. Returns message to user.
+ * Toggles foreground-only mode on/off when signal is received. Returns message to user.
  *
  * Args: int - foreground signal
  *
  * Returns: None
  */
-void fgModeOn(int sig) {
-//    register fgmode_off for SIGTSTP
-    isFgMode = 1;
-    char* message = "Entering foreground-only mode (& is now ignored)\n";
-    char* prompt = ": ";
-    write(STDOUT_FILENO, message, 50);
-    write(STDOUT_FILENO, prompt, 2);
+void fgModeToggle(int sig) {
+    if(isFgMode == 0) {
+        isFgMode = 1;
+        char *message = "Entering foreground-only mode (& is now ignored)\n";
+        char *prompt = ": ";
+        write(STDOUT_FILENO, message, 50);
+        write(STDOUT_FILENO, prompt, 2);
+    } else {
+        isFgMode = 0;
+        char* message = ("Exiting foreground-only mode\n");
+        char* prompt = ": ";
+        write(STDOUT_FILENO, message, 30);
+        write(STDOUT_FILENO, prompt, 2);
+    }
 }
 
-/*
- * FUNCTION fgModeOff(int)
- * ---------------------------------------
- * Toggles foreground-only mode on when signal is received. Returns message to user.
- *
- * Args: int - foreground signal
- *
- * Returns: None
- */
-void fgModeOff(int sig) {
-//    register fgmode_on() for SIGTSTP
-    isFgMode = 0;
-    char* message = ("Exiting foreground-only mode\n");
-    char* prompt = ": ";
-    write(STDOUT_FILENO, message, 30);
-    write(STDOUT_FILENO, prompt, 2);
-}
 /*
  * FUNCTION: parseInput(char*)
  * ---------------------------------------
@@ -187,7 +164,7 @@ int parseInput(char* args) {
 
             // put argToken in global args list
             argsGlobal[localArgsCount] = argToken;
-
+           // handle $$ expansion
             for(i=0;i < strlen(argsGlobal[localArgsCount]); i++) {
                 if (argsGlobal[localArgsCount][i] == '$' && argsGlobal[localArgsCount][i+1] == '$') {
                     argsGlobal[localArgsCount][i] = '\0';
@@ -213,7 +190,6 @@ int parseInput(char* args) {
  */
 void doCmds(void) {
     char* command = argsGlobal[0];
-    int passStatus = 0;
 
 //    command is comment '#'
     if (command[0] == '#' || command[0] == '\n') {
@@ -225,14 +201,14 @@ void doCmds(void) {
     }
 //    command is 'status
     else if (strcmp(command, status) == 0) {
-        statusCmd(&passStatus);
+        statusCmd();
     }
 //    command is 'exit'
     else if (strcmp(command, exitSmallsh) == 0) {
         exitCmd();
     }
     else {
-        execCmds(&passStatus);
+        execCmds();
     };
 }
 
@@ -248,10 +224,8 @@ void doCmds(void) {
 void isBkgCmd() {
     char* lastCommand = argsGlobal[argsCount - 1];
     if (strcmp(lastCommand, bkg) == 0) {
-        printf("bkg cmd processed\n");
 //        don't allow bkg if foreground only mode on
         if (isFgMode == 1) {
-            printf("Error: shell is in foreground only mode, background processes not allowed");
             isBkg = 0;
         } else isBkg = 1;
     }
@@ -296,17 +270,16 @@ void cdCmd() {
  *
  * Returns: None
  */
-void statusCmd(int* passStatus) {
-    if(forkList[0] == 0) {
-        printf("Exit status %d\n", forkStatus);
-    } else {
-        if (WIFEXITED(*passStatus)) {
-            printf("Process terminated with exit code %d.\n", WEXITSTATUS(*passStatus));
-        } else if (WIFSIGNALED(*passStatus)) {
-            printf("Process terminated by signal %d.\n", WTERMSIG(*passStatus));
+void statusCmd() {
+    // get status of last fork
+    waitpid(getpid(), &forkStatus, 0);
+    // print exit value or signal value
+    if (WIFEXITED(forkStatus)) {
+            printf("Exit value %d\n", WEXITSTATUS(forkStatus));
+        } else if (WIFSIGNALED(forkStatus)) {
+            printf("Terminated by signal %d\n", WTERMSIG(forkStatus));
         }
         fflush(stdout);
-    }
 }
 
 /*
@@ -324,7 +297,6 @@ void exitCmd() {
     if (forks != 0) printf("Terminating processes...\n");
     for(i = 0; i < forks; i++) kill(forkList[i], SIGTERM);
     printf("Exiting smallsh, goodbye.\n");
-    exitFlag = 1;
     exit(0);
 }
 
@@ -339,45 +311,38 @@ void exitCmd() {
  *
  * Returns: None
  */
-void execCmds(int* passStatus) {
-//    Taken from Module 4
-//    check for isBkg
-//    check for fgOnlyMode
-//      flip fgCommandRun flag
-    fgCommandRun = 1;
-    // Fork a new process
+void execCmds() {
+// Taken from Module 4
     pid_t spawnPid = fork();
-//    add to list of forks for exit call
+    // add to list of forks for exit call
     forkList[forks] = spawnPid;
     forks++;
-//    to trim &
+    // to trim &
     char* lastCommand = argsGlobal[argsCount - 1];
 
     if (strcmp(lastCommand,"&") == 0) {
-//        remove &
+        // remove &
         isBkgCmd();
         argsGlobal[argsCount - 1] = NULL;
 }
     int i;
     char* inputFile = NULL;
     char* outputFile = NULL;
-    switch(spawnPid){
-//        error
+    switch(spawnPid) {
+        // error
         case -1:
             perror("Error: Fork failed\n");
-//            TODO: Fix exitFlag/exitCmd and set status to 1
             exit(1);
         case 0:
-//            check for input / output redirection
-            for(i = 0; argsGlobal[i] != NULL; i++) {
+            // check for input / output redirection
+            for (i = 0; argsGlobal[i] != NULL; i++) {
                 if (strcmp(argsGlobal[i], "<") == 0) {
-//                        remove < from args list
+                    // remove < from args list
                     argsGlobal[i] = NULL;
                     inputFile = argsGlobal[i + 1];
                     i++;
-                }
-                else if (strcmp(argsGlobal[i], ">") == 0) {
-//                        remove > from args list
+                } else if (strcmp(argsGlobal[i], ">") == 0) {
+                    // remove > from args list
                     argsGlobal[i] = NULL;
                     outputFile = argsGlobal[i + 1];
                     i++;
@@ -407,32 +372,34 @@ void execCmds(int* passStatus) {
                     close(file2);
                 }
             }
-//          if fg only ON remove previous ignore for CTRL-C
-            if(isFgMode) {
+            // if fg only ON remove previous ignore for CTRL-C
+            if (isFgMode) {
                 SIGINT_action.sa_handler = SIG_DFL;
                 sigaction(SIGINT, &SIGINT_action, NULL);
             }
 
+            // make the fork
             execvp(argsGlobal[0], argsGlobal);
-            // TODO: Fix exitFlag/exitCmd and set status to 1
             printf("Error: No such file or directory\n");
             exit(1);
 
         default:
             // In the parent process
-            // Wait for child's termination
-            if(isBkg == 1) {
-                printf(":");
+            // If bkg wait for child's termination, else WNOHANG
+            if (isBkg == 1) {
+                waitpid(spawnPid, &forkStatus, WNOHANG);
+                printf("Background pid is %d\n", spawnPid);
                 fflush(stdout);
-                spawnPid = waitpid(spawnPid, &forkStatus, WNOHANG);
-                printf("background pid is %d done: ", spawnPid);
-                fflush(stdout);
-                statusCmd(passStatus);
-            }
-            else {
+            } else {
                 waitpid(spawnPid, &forkStatus, 0);
             }
     }
+        // keep checking to see if bkg forks are done, then get their status
+        while ((spawnPid = waitpid(-1, &forkStatus, WNOHANG)) > 0) {
+                printf("Background pid %d is done: ", spawnPid);
+                fflush(stdout);
+                statusCmd();
+            }
 }
 
 
