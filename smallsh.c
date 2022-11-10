@@ -322,7 +322,6 @@ void execCmds() {
             exit(1);
         case 0:
             // if fg only ON remove previous ignore for CTRL-C
-            printf("my pid is %d\n", getpid());
             if (isFgMode) {
                 SIGINT_action.sa_handler = SIG_DFL;
                 sigaction(SIGINT, &SIGINT_action, NULL);
@@ -361,13 +360,13 @@ void execCmds() {
 
             if (output == 1) {
                 int file2;
-                file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+                file2 = open(outputFile, O_WRONLY | O_CREAT | O_TRUNC);
                 if(file2 == -1){
                     printf("Error: Cannot open file for output\n");
                     fflush(stdout);
                     exit(1);
                 }
-                dup2(file2, 0);
+                dup2(file2, 1);
                 close(file2);
             }
 
