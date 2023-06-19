@@ -1,6 +1,6 @@
 # What is this?
 
-A simple Linux shell that runs command line instructions.
+A simple Linux shell that runs command line instructions, developed in CLion.
 - Support for the redirection of standard input and standard output.
 - Support for three built in commands: exit, cd, and status. (Status prints the exit or termination status of the most recent background task.)
 - Support for comments beginning with the # character.
